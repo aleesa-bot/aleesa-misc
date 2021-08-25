@@ -1,0 +1,27 @@
+{
+    # redis address
+    "server" : "redis",
+    "port" : "6379",
+    "channels": [
+        "misc"
+    ],
+
+    # should we fork() and become unix daemon?
+    "daemonize": 1,
+
+    # unprivileged system user to run bot as
+    "user" : "nobody",
+
+    # messages with commands will begin with this symbol
+    "csign": "!",
+
+    # logs goes there
+    "log" : "/var/log/aleesa-misc/aleesa-misc.log",
+    "loglevel": "info",
+
+    # ditto
+    "pid" : "/var/run/aleesa-misc/aleesa-misc.pid",
+
+    # maximal amount of message forwardings, to avoid endless loops
+    "forwards_max" : 5
+}

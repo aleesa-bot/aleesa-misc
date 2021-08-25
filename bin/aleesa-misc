@@ -1,0 +1,184 @@
+#!/usr/bin/perl
+
+use 5.018;
+use strict;
+use warnings;
+use utf8;
+use open qw (:std :utf8);
+use English qw ( -no_match_vars );
+
+use version; our $VERSION = qw (1.0);
+
+my $workdir;
+
+# До фактического запуска логики программы, сменим рабочий каталог, чтобы подцепить либы
+BEGIN {
+	use Cwd qw (chdir abs_path);
+	my @CWD = split /\//xms, abs_path ($PROGRAM_NAME);
+
+	if ($#CWD > 1) {
+		$#CWD = $#CWD - 2;
+	}
+
+	$workdir = join '/', @CWD;
+	chdir $workdir;
+}
+
+use lib ("$workdir/lib", "$workdir/vendor_perl", "$workdir/vendor_perl/lib/perl5");
+no Cwd;
+use Cwd::utf8 qw (chdir abs_path);
+use File::Basename qw (basename dirname);
+use File::Path qw (make_path);
+use Mojo::Log;
+use POSIX qw (setgid setuid setsid);
+use Conf qw (LoadConf);
+use Misc qw (RunMisc);
+
+sub daemonize;
+sub __fork;
+sub __signal_handler;
+
+local $OUTPUT_AUTOFLUSH = 1;
+my $runAsUid = $UID;
+
+my $piddir = '/var/run/' . basename (abs_path ($PROGRAM_NAME));
+my $CONF = LoadConf ();
+my $loglevel = $CONF->{'loglevel'} // 'info';
+my $logfile;
+my $log;
+
+if (defined $CONF->{'log'}) {
+	$logfile = $CONF->{'log'};
+} elsif (defined $CONF->{'debug_log'}) {
+	$logfile = $CONF->{'debug_log'};
+}
+
+# Если мы запускаемся под рутом, то попробуем создать необходимые служебные каталоги и простать на них корректных
+# владельца и права
+if ($UID == 0) {
+	my $user = $CONF->{'user'};
+
+	unless (defined $user) {
+		die "Unable to run as root, please define unprivileged user in config.json\n";
+	}
+
+	my ($uid, $gid) = (getpwnam $user)[2,3];
+
+	unless (-d $piddir) {
+		make_path (
+			$piddir, {
+				uid   => $uid,
+				group => $gid
+			}
+		);
+	}
+
+	if (defined $logfile) {
+		my $logdir = dirname $logfile;
+
+		unless (-d $logdir) {
+			make_path (
+					$logdir, {
+							uid   => $uid,
+							group => $gid
+					}
+			) or die "Unable to create $logdir: $OS_ERROR\n";
+		}
+	}
+
+	# Переключаемся на "рабочего" пользователя и сбрасываем привилегии.
+	setgid ($gid) or die "Unable to switch to group of $user($OS_ERROR)\n";
+	setuid ($uid) or die "Unable to switch to account $user($OS_ERROR)\n";
+} else {
+	$piddir = $workdir;
+}
+
+if (defined $logfile) {
+	$log = Mojo::Log->new (path => $logfile, level => $loglevel);
+} else {
+	$log = Mojo::Log->new (path => '/dev/null', level => 'fatal');
+}
+
+# По-умолчанию, демонизируемся, если явно не указано, что этого делать не надо
+if (defined ($CONF->{'daemonize'}) && $CONF->{'daemonize'}) {
+	daemonize ();
+} elsif ( ! defined ($CONF->{'daemonize'})) {
+	daemonize ();
+}
+
+# Запишем pid-файл
+my $apath = abs_path $PROGRAM_NAME;
+
+unless (defined $apath) {
+	$log->fatal ("[FATAL] Unable to get abs_path: $OS_ERROR\n");
+	exit 1;
+};
+
+our $pidfile = sprintf '%s/%s.pid', $piddir, basename $apath;
+$log->info ("[INFO] Creating pidfile at $pidfile");
+
+open my $MYPID, '>', $pidfile or do {
+	$log->fatal ("[FATAL] Error opening $pidfile: $OS_ERROR");
+	exit 1;
+};
+
+print {$MYPID} $PID or do {
+	$log->fatal ("[FATAL] Error writing to $pidfile: $OS_ERROR");
+	exit 1;
+};
+
+close $MYPID;                                        ## no critic (InputOutput::RequireCheckedSyscalls)
+
+# При наличии хака в лице Mojo::IOLoop::Signal в Misc.pm, установка хэндлера в этом месте - это фактически
+# подстраховка на случай ядерной войны.
+local $SIG{INT}  = \&__signal_handler;
+local $SIG{TERM} = \&__signal_handler;
+
+# Поставим правильное имя процесса в proctitle
+$PROGRAM_NAME = abs_path $PROGRAM_NAME;              ## no critic (Variables::RequireLocalizedPunctuationVars)
+
+# И запустим уже наш сервис
+RunMisc ();
+
+if (-f $pidfile) {
+	unlink $pidfile;
+}
+
+exit 0;
+
+sub daemonize {
+	__fork ();
+	POSIX::setsid ();
+	open STDIN, '<', '/dev/null';                    ## no critic (InputOutput::RequireCheckedSyscalls, InputOutput::RequireCheckedOpen)
+	__fork ();
+	umask 0;
+	return;
+}
+
+sub __fork {
+	my $pid = fork;
+
+	unless (defined $pid) {
+		$log->fatal ("[FATAL] Can't fork: $OS_ERROR");
+		exit 1;
+	}
+
+	if ($pid != 0) {
+		exit;
+	}
+
+	return;
+}
+
+sub __signal_handler {
+	$log->info ("[INFO] Caught a signal $OS_ERROR");
+
+	if (-f $pidfile) {
+		unlink $pidfile;
+	}
+
+	exit 0;
+}
+
+__END__
+# vim: set ft=perl noet ai ts=4 sw=4 sts=4:
