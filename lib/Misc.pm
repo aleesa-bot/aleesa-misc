@@ -78,28 +78,32 @@ my $parse_message = sub {
 	# Если сообщение не попало ни под один шаблон, оно отправляется к craniac-у
 	my $send_to = 'craniac';
 
-	$log->debug ('[DEBUG] Incoming message ' . Dumper($m));
+	$log->debug ('[DEBUG] Incoming message ' . Dumper ($m));
 
 	# Пробуем найти команды. Сообщения, начинающиеся с $answer->{misc}->{csign}
 	if (substr ($m->{message}, 0, 1) eq $answer->{misc}->{csign}) {
+		my $cmd = substr $m->{message}, 1;
 		my $done = 0;
+
+		# Вначале поищем команды модуля Phrases
 		my @phrases_cmd = qw (friday пятница proverb пословица fortune фортунка f ф karma карма);
 
-		while (my $cmd = pop @phrases_cmd) {
-			if (substr ($m->{message}, 1) eq $cmd) {
+		while (my $check= pop @phrases_cmd) {
+			if ($cmd eq $check) {
 				$send_to = 'phrases';
 				$done = 1;
 				last;
 			}
 		}
 
+		# Потом - команды модуля WebApp
 		unless ($done) {
 			my @webapp_cmd = qw (buni anek анек анекдот cat кис drink праздник fox лис frog лягушка horse лошадь лошадка
 								monkeyuser rabbit bunny кролик snail улитка owl сова сыч xkcd tits boobs tities boobies
 								сиси сисечки butt booty ass попа попка);
 
-			while (my $cmd = pop @webapp_cmd) {
-				if (substr ($m->{message}, 1) eq $cmd) {
+			while (my $check = pop @webapp_cmd) {
+				if ($cmd eq $check) {
 					$send_to = 'webapp';
 					$done = 1;
 					last;
@@ -107,6 +111,20 @@ my $parse_message = sub {
 			}
 		}
 
+		# Потом - модуля Games
+		unless ($done) {
+			my @games_cmd = qw (dig копать fish fishing рыба рыбка рыбалка);
+
+			while (my $check = pop @games_cmd) {
+				if ($cmd eq $check) {
+					$send_to = 'games';
+					$done = 1;
+					last;
+				}
+			}
+		}
+
+		# И наконец остальные, более сложные команды, с аргументами
 		unless ($done) {
 			if (substr ($m->{message}, 1, 2) eq 'w ' || substr ($m->{message}, 1, 2) eq 'п ') {
 				$send_to = 'webapp';
@@ -119,6 +137,7 @@ my $parse_message = sub {
 				$done = 1;
 			}
 		}
+
 	# Попробуем найти изменение кармы
 	} elsif (substr ($m->{message}, -2) eq '++'  ||  substr ($m->{message}, -2) eq '--') {
 		my @arr = split /\n/, $m->{message};
