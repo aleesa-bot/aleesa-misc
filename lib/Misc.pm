@@ -8,13 +8,13 @@ use utf8;
 use open qw (:std :utf8);
 
 # Модули для работы приложения
+use Log::Any qw ($log);
 use Math::Random::Secure qw (irand);
 # Чтобы "уж точно" использовать hiredis-биндинги, загрузим этот модуль перед Mojo::Redis
 use Protocol::Redis::XS;
 use Mojo::Redis;
 use Mojo::IOLoop;
 use Mojo::IOLoop::Signal;
-use Mojo::Log;
 use Data::Dumper;
 
 use Conf qw (LoadConf);
@@ -24,23 +24,7 @@ use Exporter qw (import);
 our @EXPORT_OK = qw (RunMisc);
 
 my $c = LoadConf ();
-
-my $loglevel = $c->{'loglevel'} // 'info';
 my $fwd_cnt = $c->{'forward_max'} // 5;
-my $logfile;
-my $log;
-
-if (defined $c->{'log'}) {
-	$logfile = $c->{'log'};
-} elsif (defined $c->{'debug_log'}) {
-	$logfile = $c->{'debug_log'};
-}
-
-if (defined $logfile) {
-	$log = Mojo::Log->new (path => $logfile, level => $loglevel);
-} else {
-	$log = Mojo::Log->new (path => '/dev/null', level => 'fatal');
-}
 
 # Основной парсер
 my $parse_message = sub {
