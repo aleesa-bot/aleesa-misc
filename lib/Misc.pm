@@ -7,6 +7,7 @@ use warnings;
 use utf8;
 use open qw (:std :utf8);
 
+use Clone  qw (clone);
 # Модули для работы приложения
 use Log::Any qw ($log);
 use Math::Random::Secure qw (irand);
@@ -30,7 +31,7 @@ my $fwd_cnt = $c->{'forward_max'} // 5;
 my $parse_message = sub {
 	my $self = shift;
 	my $m = shift;
-	my $answer = $m;
+	my $answer = clone ($m);
 	$answer->{from} = 'misc';
 
 	if (defined $answer->{misc}) {
