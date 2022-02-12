@@ -95,3 +95,19 @@ lib_sections    = NAME | VERSION | DESCRIPTION | AUTHOR | LICENSE AND COPYRIGHT
 
 [-Variables::ProhibitPackageVars]
 # fuck off
+
+[-Editor::RequireEmacsFileVariables]
+
+[-TooMuchCode::ProhibitUnnecessaryUTF8Pragma]
+
+[-CodeLayout::RequireASCII]
+
+[-TooMuchCode::ProhibitDuplicateLiteral]
+
+[-ErrorHandling::RequireUseOfExceptions]
+
+[-ValuesAndExpressions::RequireConstantOnLeftSideOfEquality]
+
+[-Lax::RequireConstantOnLeftSideOfEquality::ExceptEq]
+
+[-Miscellanea::ProhibitUnrestrictedNoCritic]
