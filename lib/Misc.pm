@@ -65,8 +65,8 @@ my $parse_message = sub {
 	$log->debug ('[DEBUG] Incoming message ' . Dumper ($m));
 
 	# Пробуем найти команды. Сообщения, начинающиеся с $answer->{misc}->{csign}
-	if (substr ($m->{message}, 0, 1) eq $answer->{misc}->{csign}) {
-		my $cmd = substr $m->{message}, 1;
+	if (substr ($m->{message}, 0, length ($answer->{misc}->{csign})) eq $answer->{misc}->{csign}) {
+		my $cmd = substr $m->{message}, length ($answer->{misc}->{csign});
 		my $done = 0;
 
 		# Вначале поищем команды модуля Phrases
@@ -110,24 +110,36 @@ my $parse_message = sub {
 
 		# И наконец остальные, более сложные команды, с аргументами
 		unless ($done) {
-			if (substr ($m->{message}, 1, 2) eq 'w ' || substr ($m->{message}, 1, 2) eq 'п ') {
-				$send_to = 'webapp';
-				$done = 1;
-			} elsif (substr ($m->{message}, 1, 8) eq 'weather ' || substr ($m->{message}, 1, 8) eq 'погодка ') {
-				$send_to = 'webapp';
-				$done = 1;
-			} elsif (substr ($m->{message}, 1, 7) eq 'погода ' || substr ($m->{message}, 1, 8) eq 'погадка ') {
-				$send_to = 'webapp';
-				$done = 1;
+			my @cmds = ('w ', 'п ', 'weather ', 'погодка ', 'погадка ', 'погода ');
+
+			while (my $check = pop @cmds) {
+				if (length ($cmd) > length ($check)  &&  substr ($m->{message}, length ($answer->{misc}->{csign}), length ($check)) eq $check) {
+					$send_to = 'webapp';
+					$done = 1;
+					last;
+				}
+			}
+
+			$#cmds = -1;
+			@cmds = ('karma ', 'карма ');
+
+			while (my $check = pop @cmds) {
+				if (length ($cmd) > length ($check)  &&  substr ($m->{message}, length ($answer->{misc}->{csign}), length ($check)) eq $check) {
+					$send_to = 'phrases';
+					$done = 1;
+					last;
+				}
 			}
 		}
 
 	# Попробуем найти изменение кармы
-	} elsif (substr ($m->{message}, -2) eq '++'  ||  substr ($m->{message}, -2) eq '--') {
+	} elsif (substr ($m->{message}, 0 - length ('++')) eq '++'  ||  substr ($m->{message}, 0 - length ('--')) eq '--') {
 		my @arr = split /\n/, $m->{message};
 
 		# Предполагается, что фраза - это только одна строка
 		if ($#arr < 1) {
+			# Подпираем это дело - независимо от того, что пришло нам от chat-плагина
+			$answer->{misc}->{answer} = 1;
 			$send_to = 'phrases';
 		}
 	}
