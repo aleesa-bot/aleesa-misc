@@ -7,7 +7,7 @@ use warnings;
 use utf8;
 use open qw (:std :utf8);
 
-use Clone  qw (clone);
+use Clone qw (clone);
 # Модули для работы приложения
 use Log::Any qw ($log);
 # Чтобы "уж точно" использовать hiredis-биндинги, загрузим этот модуль перед Mojo::Redis
@@ -50,13 +50,33 @@ my $parse_message = sub {
 			$answer->{misc}->{answer} = 1;
 		}
 
+		unless (defined $answer->{misc}->{bot_nick}) {
+			$answer->{misc}->{bot_nick} = '';
+		}
+
 		unless (defined $answer->{misc}->{csign}) {
 			$answer->{misc}->{csign} = '!';
 		}
+
+		unless (defined $answer->{misc}->{good_morning}) {
+			$answer->{misc}->{good_morning} = 0;
+		}
+
+		unless (defined $answer->{misc}->{msg_format}) {
+			$answer->{misc}->{msg_format} = 0;
+		}
+
+		unless (defined $answer->{misc}->{username}) {
+			$answer->{misc}->{username} = '';
+		}
 	} else {
 		$answer->{misc}->{answer} = 1;
+		$answer->{misc}->{bot_nick} = '';
 		$answer->{misc}->{csign} = '!';
+		$answer->{misc}->{fwd_cnt} = 1;
+		$answer->{misc}->{good_morning} = 0;
 		$answer->{misc}->{msg_format} = 0;
+		$answer->{misc}->{username} = '';
 	}
 
 	# Если сообщение не попало ни под один шаблон, оно отправляется к craniac-у
@@ -64,9 +84,11 @@ my $parse_message = sub {
 
 	$log->debug ('[DEBUG] Incoming message ' . Dumper ($m));
 
+	my $csign = $answer->{misc}->{csign};
+
 	# Пробуем найти команды. Сообщения, начинающиеся с $answer->{misc}->{csign}
-	if (substr ($m->{message}, 0, length ($answer->{misc}->{csign})) eq $answer->{misc}->{csign}) {
-		my $cmd = substr $m->{message}, length ($answer->{misc}->{csign});
+	if ((length $m->{message} > length $csign)  &&  (substr ($m->{message}, 0, length $csign) eq $csign)) {
+		my $cmd = substr $m->{message}, length $csign;
 		my $done = 0;
 
 		# Вначале поищем команды модуля Phrases
@@ -83,8 +105,8 @@ my $parse_message = sub {
 		# Потом - команды модуля WebApp
 		unless ($done) {
 			my @webapp_cmd = qw (buni anek анек анекдот cat кис drink праздник fox лис frog лягушка horse лошадь лошадка
-								monkeyuser rabbit bunny кролик snail улитка owl сова сыч xkcd tits boobs tities boobies
-								сиси сисечки butt booty ass попа попка);
+			                     monkeyuser rabbit bunny кролик snail улитка owl сова сыч xkcd tits boobs tities boobies
+			                     сиси сисечки butt booty ass попа попка);
 
 			while (my $check = pop @webapp_cmd) {
 				if ($cmd eq $check) {
@@ -108,12 +130,12 @@ my $parse_message = sub {
 			}
 		}
 
-		# И наконец остальные, более сложные команды, с аргументами
+		# И, наконец, остальные, более сложные команды, с аргументами
 		unless ($done) {
 			my @cmds = ('w ', 'п ', 'weather ', 'погодка ', 'погадка ', 'погода ');
 
 			while (my $check = pop @cmds) {
-				if (length ($cmd) > length ($check)  &&  substr ($m->{message}, length ($answer->{misc}->{csign}), length ($check)) eq $check) {
+				if ((length $cmd > length $check)  &&  substr ($cmd, 0, length $check) eq $check) {
 					$send_to = 'webapp';
 					$done = 1;
 					last;
@@ -124,14 +146,13 @@ my $parse_message = sub {
 			@cmds = ('karma ', 'карма ');
 
 			while (my $check = pop @cmds) {
-				if (length ($cmd) > length ($check)  &&  substr ($m->{message}, length ($answer->{misc}->{csign}), length ($check)) eq $check) {
+				if ((length $cmd > length $check)  &&  substr ($cmd, 0, length $check) eq $check) {
 					$send_to = 'phrases';
 					$done = 1;
 					last;
 				}
 			}
 		}
-
 	# Попробуем найти изменение кармы
 	} elsif (substr ($m->{message}, 0 - length ('++')) eq '++'  ||  substr ($m->{message}, 0 - length ('--')) eq '--') {
 		my @arr = split /\n/, $m->{message};
