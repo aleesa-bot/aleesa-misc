@@ -7,15 +7,13 @@ use warnings;
 use utf8;
 use open qw (:std :utf8);
 
-use Clone qw (clone);
 # Модули для работы приложения
+use Clone qw (clone);
+use Data::Dumper qw (Dumper);
 use Log::Any qw ($log);
-# Чтобы "уж точно" использовать hiredis-биндинги, загрузим этот модуль перед Mojo::Redis
-use Protocol::Redis::XS ();
 use Mojo::Redis ();
 use Mojo::IOLoop ();
 use Mojo::IOLoop::Signal ();
-use Data::Dumper qw (Dumper);
 
 use Conf qw (LoadConf);
 
@@ -24,7 +22,11 @@ use Exporter qw (import);
 our @EXPORT_OK = qw (RunMisc);
 
 my $c = LoadConf ();
-my $fwd_cnt = $c->{'forward_max'} // 5;
+my $fwd_cnt = 5;
+
+if (defined $c->{'forward_max'}) {
+	$fwd_cnt = $c->{'forward_max'};
+}
 
 # Основной парсер
 my $parse_message = sub {
@@ -55,7 +57,7 @@ my $parse_message = sub {
 		}
 
 		unless (defined $answer->{misc}->{csign}) {
-			$answer->{misc}->{csign} = '!';
+			$answer->{misc}->{csign} = $c->{csign};
 		}
 
 		unless (defined $answer->{misc}->{good_morning}) {
@@ -72,7 +74,7 @@ my $parse_message = sub {
 	} else {
 		$answer->{misc}->{answer} = 1;
 		$answer->{misc}->{bot_nick} = '';
-		$answer->{misc}->{csign} = '!';
+		$answer->{misc}->{csign} = $c->{csign};
 		$answer->{misc}->{fwd_cnt} = 1;
 		$answer->{misc}->{good_morning} = 0;
 		$answer->{misc}->{msg_format} = 0;
@@ -186,7 +188,7 @@ my $__signal_handler = sub {
 };
 
 
-# main loop, он же event loop
+# Main loop, он же event loop
 sub RunMisc {
 	$log->info ("[INFO] Connecting to $c->{server}, $c->{port}");
 
@@ -227,10 +229,8 @@ sub RunMisc {
 		);
 	}
 
-	Mojo::IOLoop::Signal->on (
-		TERM => $__signal_handler,
-		INT  => $__signal_handler,
-	);
+	Mojo::IOLoop::Signal->on (TERM => $__signal_handler);
+	Mojo::IOLoop::Signal->on (INT  => $__signal_handler);
 
 	do { Mojo::IOLoop->start } until Mojo::IOLoop->is_running;
 	return;

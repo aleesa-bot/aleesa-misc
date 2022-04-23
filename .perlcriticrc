@@ -111,3 +111,5 @@ lib_sections    = NAME | VERSION | DESCRIPTION | AUTHOR | LICENSE AND COPYRIGHT
 [-Lax::RequireConstantOnLeftSideOfEquality::ExceptEq]
 
 [-Miscellanea::ProhibitUnrestrictedNoCritic]
+
+[-Lax::ProhibitEmptyQuotes::ExceptAsFallback]
